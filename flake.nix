@@ -9,7 +9,13 @@
     in {
       devShells.default = pkgs.mkShell {
         nativeBuildInputs = [ pkgs.bashInteractive ];
-        buildInputs = with pkgs; [ R rPackages.tidyverse rPackages.languageserver pandoc ];
+        buildInputs = with pkgs; [ R
+                                   rPackages.tidyverse
+                                   rPackages.languageserver
+                                   rPackages.svglite
+                                   rPackages.ggridges
+                                   pandoc
+                                 ];
        };
     });
 }
