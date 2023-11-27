@@ -1,6 +1,12 @@
+#+title: Report
+#+PROPERTY: header-args:R :session *cardano-perf-report* :cache yes :dir ./
+
+
+#+begin_src R :results silent
 library("ggridges")
 library("tidyverse")
 library("rstatix")
+library("tables")
 
 options(scipen = 999)
 
@@ -40,87 +46,22 @@ df <- bind_rows(
 ) %>%
   mutate(TestCase = paste(GHC, Branch, sep = "_")) %>%
   arrange(slot)
+#+end_src
 
-p <- df %>%
-  ggplot(aes(x = totalTime / 1000000, fill = Branch)) + ## convert time to milliseconds from nanoseconds
-  geom_histogram(alpha = 0.3) +
-  scale_x_log10() +
-  labs(x = "TotalTime [ms]") +
-  facet_grid(GHC ~ Branch)
+#+RESULTS:
 
 
-p2 <- ggplot(df, aes(totalTime,
+Now we have our dataset, let's plot a bit:
+
+#+begin_src R :exports both :results output graphics file :file plots/test.pdf
+p <- ggplot(df, aes(totalTime,
                      y = TestCase,
                      fill = GHC)) +
   geom_density_ridges(alpha = .6) +
   scale_x_log10() +
   theme_minimal()
+p
+#+end_src
 
-
-
-p3 <- ggplot(df, aes(mut_blockApply,
-                     y = TestCase,
-                     fill = GHC)) +
-  geom_density_ridges(alpha = .6) +
-  scale_x_log10() +
-  theme_minimal()
-
-
-boxplots <- ggplot(df, aes(x = Branch, y = totalTime / 1000)) +
-  geom_boxplot() +
-  scale_y_log10()
-
-# now the kruskall wallace test
-kruskal.test(totalTime ~ Branch, data = df)
-
-## Kruskal-Wallis rank sum test
-
-## data:  totalTime by Branch
-## Kruskal-Wallis chi-squared = 1.1145, df = 2, p-value = 0.5728
-
-kruskal.test(totalTime ~ GHC, data = df)
-
-## as we expected GHC explains most of the variance
-## Kruskal-Wallis rank sum test
-
-## data:  totalTime by GHC
-## Kruskal-Wallis chi-squared = 70.109, df = 2, p-value =
-## 0.0000000000000005969
-
-##################### Test within each GHC
-kruskal.test(totalTime ~ Branch, data = df %>% filter(GHC == 96))
-
-##  Kruskal-Wallis rank sum test
-
-## data:  totalTime by Branch
-## Kruskal-Wallis chi-squared = 12.293, df = 2, p-value = 0.00214
-
-## and we have a significant difference! Let's check 92 and 810
-
-kruskal.test(totalTime ~ Branch, data = df %>% filter(GHC == 92))
-## 	Kruskal-Wallis rank sum test
-
-## data:  totalTime by Branch
-## Kruskal-Wallis chi-squared = 14.716, df = 2, p-value = 0.0006376
-
-kruskal.test(totalTime ~ Branch, data = df %>% filter(GHC == 810))
-
-## 	Kruskal-Wallis rank sum test
-
-## data:  totalTime by Branch
-## Kruskal-Wallis chi-squared = 7.9877, df = 2, p-value = 0.01843
-
-##################### and now determining the factors
-
-pairwise.wilcox.test(df$totalTime, filter(df,GHC == 96)$Branch, p.adjust.method = "holm", paired = TRUE)
-
-df %>%
-  filter(GHC == 96) %>%
-  group_by(Branch) %>%
-  select(totalTime) %>%
-  get_summary_stats(type = "median_iqr")
-
-pairwise.wilcox.test(df$totalTime, filter(df,GHC == 92)$Branch, p.adjust.method = "holm", paired = TRUE)
-
-pairwise.wilcox.test(df$totalTime, filter(df,GHC == 810)$Branch, p.adjust.method = "holm", paired = TRUE)
-
+#+RESULTS[0feb6b0f2edadbe982053347c0f534d425434d27]:
+[[file:plots/test.pdf]]
