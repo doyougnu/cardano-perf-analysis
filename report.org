@@ -62,7 +62,7 @@
     #+RESULTS[0b5c315f8449b719e466662d9e074aa6b4aee56b]: num-observations
     : 122
 
-    call_num-observations() observations per run. 
+    call_num-observations()    observations per run.
 
   - Furthermore, each observation belongs to a specific slot id, which means we
     have statistically /paired/ data. Paired data occurs when an observation is
@@ -128,7 +128,7 @@
 
     The ledger uses a map data structure called ~UMap~ whose range is
     represented by a type called ~UMElem~ which looks like this: 
-    #+begin_src haskell
+    #+begin_src haskell :noeval
     -- So,
     -- TEEEE means none of the components are present,
     -- TFEEE means only the reward-deposit pair is present,
@@ -246,19 +246,19 @@ df <- bind_rows(
 
     #+RESULTS[72509926edbbb344737639a0e1049b53438ac466]:
     #+begin_example
-    [1m[22mAdding missing grouping variables: `GHC`, `Branch`
-    [90m# A tibble: 9 × 6[39m
+    Adding missing grouping variables: `GHC`, `Branch`
+    # A tibble: 9 × 6
       GHC   Branch      variable      n median    iqr
-      [3m[90m<fct>[39m[23m [3m[90m<fct>[39m[23m       [3m[90m<fct>[39m[23m     [3m[90m<dbl>[39m[23m  [3m[90m<dbl>[39m[23m  [3m[90m<dbl>[39m[23m
-    [90m1[39m 810   baseline    totalTime   122 [4m3[24m[4m2[24m200. [4m3[24m[4m7[24m113
-    [90m2[39m 810   SplitUMElem totalTime   122 [4m3[24m[4m3[24m083  [4m3[24m[4m1[24m973.
-    [90m3[39m 810   NoFailT     totalTime   122 [4m3[24m[4m2[24m521  [4m7[24m[4m1[24m903.
-    [90m4[39m 92    baseline    totalTime   122 [4m6[24m[4m5[24m250. [4m3[24m[4m9[24m085.
-    [90m5[39m 92    SplitUMElem totalTime   122 [4m6[24m[4m4[24m412. [4m3[24m[4m8[24m234.
-    [90m6[39m 92    NoFailT     totalTime   122 [4m6[24m[4m8[24m834. [4m4[24m[4m1[24m404.
-    [90m7[39m 96    baseline    totalTime   122 [4m3[24m[4m2[24m088. [4m2[24m[4m8[24m964.
-    [90m8[39m 96    SplitUMElem totalTime   122 [4m3[24m[4m0[24m942. [4m2[24m[4m7[24m022.
-    [90m9[39m 96    NoFailT     totalTime   122 [4m3[24m[4m2[24m738  [4m2[24m[4m8[24m118.
+      <fct> <fct>       <fct>     <dbl>  <dbl>  <dbl>
+    1 810   baseline    totalTime   122 32200. 37113
+    2 810   SplitUMElem totalTime   122 33083  31973.
+    3 810   NoFailT     totalTime   122 32521  71903.
+    4 92    baseline    totalTime   122 65250. 39085.
+    5 92    SplitUMElem totalTime   122 64412. 38234.
+    6 92    NoFailT     totalTime   122 68834. 41404.
+    7 96    baseline    totalTime   122 32088. 28964.
+    8 96    SplitUMElem totalTime   122 30942. 27022.
+    9 96    NoFailT     totalTime   122 32738  28118.
     #+end_example
 
     let's plot the distribution of ~totalTime~ for each
@@ -344,29 +344,36 @@ P value adjustment method: holm
 
 Focusing on the first column which compares the branches ~SplitUMElem~ and
 ~NoFailT~ to the baseline, we find that both have a p-value less than 0.05 which
-is what we expect. Now we'll change the test to see which branch is greater than
-the baseline:
+is what we expect. Now we'll compare the branches for each ghc version explicitly:
 
-#+begin_src R :exports both :results output
-pairwise.wilcox.test(df$totalTime, filter(df,GHC == 96)$Branch, p.adjust.method = "holm", paired = TRUE, alternative = "greater")
+#+begin_src R :exports both :results output graphics file :file test.jpeg
+direct <- df %>%
+  select(slot,totalTime,GHC,Branch) %>%
+  pivot_wider(names_from = Branch, values_from = totalTime)
+
+splitUMComparison <- ggplot(direct, aes(x = baseline, y = SplitUMElem)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  facet_grid(GHC ~ .) +
+  scale_x_log10() +
+  scale_y_log10()
 #+end_src
 
-#+RESULTS[36b553313184695c5a0fe0f11e40d9f278a3c3fd]:
-#+begin_example
+#+RESULTS[84ed6db7bb213f05f2e7ffeb815bfba3b2c35911]:
+[[file:test.jpeg]]
 
-	Pairwise comparisons using Wilcoxon signed rank test with continuity correction
+#+begin_src R :exports both :results output graphics file :file test2.jpeg
+direct <- df %>%
+  select(slot,totalTime,GHC,Branch) %>%
+  pivot_wider(names_from = Branch, values_from = totalTime)
 
-data:  df$totalTime and filter(df, GHC == 96)$Branch
+noFailComparison <- ggplot(direct, aes(x = baseline, y = NoFailT)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  facet_grid(GHC ~ .) +
+  scale_x_log10() +
+  scale_y_log10()
+#+end_src
 
-            baseline    SplitUMElem
-SplitUMElem 0.000000034 -
-NoFailT     1           1
-
-P value adjustment method: holm
-#+end_example
-
-Here I have set the alternative hypothesis to be "branches are greater than the
-baseline", so a p-value above 0.05 means we'll reject the alternative hypothesis
-and accept the null: "that the branches are not greater than the baseline".
-
-We see that ~SplitUMElem~ has a p-value less than
+#+RESULTS[4ba83f2919713ed07951ee0e7970d000d831b994]:
+[[file:test2.jpeg]]
