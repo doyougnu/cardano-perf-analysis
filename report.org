@@ -62,7 +62,7 @@
     #+RESULTS[0b5c315f8449b719e466662d9e074aa6b4aee56b]: num-observations
     : 122
 
-    call_num-observations()    observations per run.
+    call_num-observations() {{{results(=122=)}}}     observations per run.
 
   - Furthermore, each observation belongs to a specific slot id, which means we
     have statistically /paired/ data. Paired data occurs when an observation is
@@ -188,7 +188,8 @@
    R.version.string
    #+end_src
 
-   #+RESULTS[bb1eab72974fd4bf182d009f627e81e5c9f6c99c]:
+   #+RESULTS[74f5cb2c597ef179de062c6aa2ef1f5bf2f8c778]:
+   : Error in eval(ei, envir) : object 'df810_baseline' not found
    : [1] "R version 4.3.1 (2023-06-16)"
 
 *** Loading and preparing the data
@@ -278,7 +279,7 @@ df <- bind_rows(
     p
     #+end_src
 
-    #+RESULTS[aecd9c9a3c0fb0a11cc39024efdaa645546b54ce]:
+    #+RESULTS[3067c7b0971965b661584979d0c472b11e1bd6bd]:
     [[file:plots/ridgeline.pdf]]
 
     The distributions have three distinct clusters and are very similar. 92
@@ -296,6 +297,14 @@ First let's check that there is a difference between GHC versions:
 kruskal.test(totalTime ~ GHC, data = df)
 #+end_src
 
+#+RESULTS[198ed04a9ec3b12efeef1696bd50ef00da0c82e9]:
+: 
+: 	Kruskal-Wallis rank sum test
+: 
+: data:  totalTime by GHC
+: Kruskal-Wallis chi-squared = 70.109, df = 2, p-value =
+: 0.0000000000000005969
+
 Now to check if the branches have had a statistically meaningful impact while
 controlling for the GHC version:
 
@@ -305,17 +314,38 @@ controlling for the GHC version:
     kruskal.test(totalTime ~ Branch, data = df %>% filter(GHC == 96))
     #+end_src
 
+    #+RESULTS[8d5d230faa7396301b4ce3d9ca9638b47ad49764]:
+    : 
+    : 	Kruskal-Wallis rank sum test
+    : 
+    : data:  totalTime by Branch
+    : Kruskal-Wallis chi-squared = 12.293, df = 2, p-value = 0.00214
+
 - 92
 
     #+begin_src R :exports both :results output
     kruskal.test(totalTime ~ Branch, data = df %>% filter(GHC == 92))
     #+end_src
 
+    #+RESULTS[c3e5939a912e77ec10acd9818b40235f622b6396]:
+    : 
+    : 	Kruskal-Wallis rank sum test
+    : 
+    : data:  totalTime by Branch
+    : Kruskal-Wallis chi-squared = 14.716, df = 2, p-value = 0.0006376
+
 - 810
 
     #+begin_src R :exports both :results output
     kruskal.test(totalTime ~ Branch, data = df %>% filter(GHC == 810))
     #+end_src
+
+    #+RESULTS[2cce8d84c1f4fcc1a4768f3794d95fbda4276dc2]:
+    : 
+    : 	Kruskal-Wallis rank sum test
+    : 
+    : data:  totalTime by Branch
+    : Kruskal-Wallis chi-squared = 7.9877, df = 2, p-value = 0.01843
 
 For each version of GHC, we find p-values of less than 0.05 meaning that the
 branches have had a statistically significant impact on ~totalTime~.
@@ -346,7 +376,7 @@ Focusing on the first column which compares the branches ~SplitUMElem~ and
 ~NoFailT~ to the baseline, we find that both have a p-value less than 0.05 which
 is what we expect. Now we'll compare the branches for each ghc version explicitly:
 
-#+begin_src R :exports both :results output graphics file :file test.jpeg
+#+begin_src R :exports both :results output graphics file :file baseline_v_splitUM.pdf :cache no
 direct <- df %>%
   select(slot,totalTime,GHC,Branch) %>%
   pivot_wider(names_from = Branch, values_from = totalTime)
@@ -357,12 +387,14 @@ splitUMComparison <- ggplot(direct, aes(x = baseline, y = SplitUMElem)) +
   facet_grid(GHC ~ .) +
   scale_x_log10() +
   scale_y_log10()
+
+splitUMComparison
 #+end_src
 
-#+RESULTS[84ed6db7bb213f05f2e7ffeb815bfba3b2c35911]:
-[[file:test.jpeg]]
+#+RESULTS[db774411ea1fa33729cf999989f63a4e8c9610f7]:
+[[file:baseline_v_splitUM.pdf]]
 
-#+begin_src R :exports both :results output graphics file :file test2.jpeg
+#+begin_src R :exports both :results output graphics file :file baseline_v_nofailT.pdf :cache no
 direct <- df %>%
   select(slot,totalTime,GHC,Branch) %>%
   pivot_wider(names_from = Branch, values_from = totalTime)
@@ -373,7 +405,9 @@ noFailComparison <- ggplot(direct, aes(x = baseline, y = NoFailT)) +
   facet_grid(GHC ~ .) +
   scale_x_log10() +
   scale_y_log10()
+
+noFailComparison
 #+end_src
 
-#+RESULTS[4ba83f2919713ed07951ee0e7970d000d831b994]:
-[[file:test2.jpeg]]
+#+RESULTS[4729c7b952126f031dbc6b59e2edc1050cb38b45]:
+[[file:baseline_v_nofailT.pdf]]
