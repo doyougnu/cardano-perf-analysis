@@ -54,6 +54,7 @@
                                    rPackages.tables
                                    pandoc
                                    myTex
+                                   neofetch
                                  ];
        };
     });
