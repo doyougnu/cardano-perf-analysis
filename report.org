@@ -301,16 +301,15 @@ p
 #+RESULTS[3067c7b0971965b661584979d0c472b11e1bd6bd]:
 [[file:plots/ridgeline.pdf]]
 
-Each plot is a kernel density plot which shows the shape and relative
-position of the distribution of ~totalTime~ for each GHC and each branch. With
-this plot we are simply trying to visualize the distribution of the
-~totalTime~ date. We see that the distributions all have three distinct
-clusters and are very similar; the branches and GHC versions have not
-fundamentally changed the distribution of ~totalTime~ . {{{g92}}} shifts
-towards higher ~totalTime~ while {{{g96}}} looks very similar to {{{g810}}}.
-Differences between branches are too close to observe with the default
-density smoothing (the default smoothing is for univariate data which is the
-kind of data we are dealing with).
+Each plot is a kernel density plot which shows the shape and relative position
+of the distribution of ~totalTime~ for each GHC and each branch. With this plot we
+are simply trying to visualize the distribution of the ~totalTime~ date. We see
+that the distributions all have three distinct clusters and are similar; the
+branches and GHC versions have not fundamentally changed the distribution of
+~totalTime~ . {{{g92}}} shifts towards higher ~totalTime~ while {{{g96}}} looks
+similar to {{{g810}}}. Differences between branches are too close to observe
+with the default density smoothing (the default smoothing is for univariate data
+which is the kind of data we are dealing with).
 
 
 ** Are the versions significant
@@ -596,4 +595,65 @@ that {{{g96}}} better optimizes the ~SplitUMElem~ branch.
 
 To wrap up, we'll create the same speedup plot but instead of showing the
 speedup of each branch on {{{g96}}} compared to {{{g810}}}, we'll compare each
-branch on {{{g96}}} to only the baseline of {{{g810}}}.
+branch on {{{g96}}} to only the baseline of {{{g810}}}:
+
+#+begin_src R :exports both :results output
+calc_speedup <- function(baseline,branch) {
+  ((baseline - branch) / baseline) * 100
+}
+
+speedup_baseline <- df %>%
+  group_by(GHC,Branch) %>%
+  reframe(enframe(quantile(totalTime, seq(0,1,0.1)), "quantile", "totalTime")) %>%
+  pivot_wider(names_from = c(Branch,GHC), values_from = totalTime, names_sep = "") %>%
+  mutate(baselineSpeedup92    = calc_speedup(baseline810,baseline92)
+       , baselineSpeedup96    = calc_speedup(baseline810,baseline96)
+       , splitUMElemSpeedup92 = calc_speedup(baseline810,SplitUMElem92)
+       , splitUMElemSpeedup96 = calc_speedup(baseline810,SplitUMElem96)
+       , noFailTSpeedup92     = calc_speedup(baseline810,SplitUMElem92)
+       , noFailTSpeedup96     = calc_speedup(baseline810,SplitUMElem96)
+       , percentile = as.numeric(substr(quantile,1, nchar(quantile)-1))
+       ) %>%
+  select(percentile,contains("Speedup"))
+
+speedup_baseline
+#+end_src
+
+#+RESULTS[9c7653c6ea5e9646c0bf2ac85cb9c62f93c54301]:
+#+begin_example
+# A tibble: 11 × 7
+   percentile baselineSpeedup92 baselineSpeedup96 splitUMElemSpeedup92
+        <dbl>             <dbl>             <dbl>                <dbl>
+ 1          0            -93.1              2.27                -92.8
+ 2         10            -93.2              2.08                -91.7
+ 3         20            -95.3              1.97                -92.9
+ 4         30           -116.               1.80               -114.
+ 5         40            -47.0             12.7                 -50.1
+ 6         50           -103.               0.348              -100.
+ 7         60            -98.2              2.50                -94.8
+ 8         70            -86.5              6.34                -83.4
+ 9         80             -2.52            21.4                   9.69
+10         90             -3.14            21.0                  10.8
+11        100             15.9             19.9                  13.8
+# ℹ 3 more variables: splitUMElemSpeedup96 <dbl>, noFailTSpeedup92 <dbl>,
+#   noFailTSpeedup96 <dbl>
+#+end_example
+
+and now the plot:
+
+#+begin_src R :exports both :results output graphics file :file speedup_v_810_quantiles.pdf
+p <- speedup_baseline %>%
+              pivot_longer(cols = contains("Speedup"),names_to = "comparison", values_to = "speedup") %>%
+  ggplot(aes(x = percentile, y = speedup, color = comparison, shape = comparison)) +
+  geom_point(size = 3) +
+  scale_shape_manual(values=c(1,16,2,17,0,15)) +
+  scale_y_continuous(breaks = seq(-120,25,5)) +
+  scale_x_continuous(breaks = seq(0,100,10)) +
+  ylab("Speedup %") +
+  theme_minimal()
+
+p
+#+end_src
+
+#+RESULTS[af564c4b043e07adaf9fc5487c36cfbf1081431d]:
+[[file:speedup_v_810_quantiles.pdf]]
