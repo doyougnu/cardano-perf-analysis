@@ -30,9 +30,9 @@
     further testing.
 
   - Splitting ~UMElem~ to take advantage of pointer tagging improves performance
-    by 3%.
-
-  - GHC-96 better optimizes the ~SplitUMElem~ branch.
+    by 3% on {{{g96}}}. Compared to the {{{g810}}} baseline, the {{{g96}}}
+    ~SplitUMElem~ branch improves performance by ~5% for 70% of the data; for
+    the very slowest slots it slightly regresses the baseline on {{{g96}}}.
 
   - For the slowest slots in the dataset, {{{g96}}} outperforms {{{g810}}} with a
     13% improvement.
@@ -294,11 +294,11 @@ p <- ggplot(df, aes(totalTime,
     scale_x_log10() +
     xlab("TotalTime [ns]") +
     ylab("GHC_Branch") +
-    theme_minimal()
+    theme_bw()
 p
 #+end_src
 
-#+RESULTS[3067c7b0971965b661584979d0c472b11e1bd6bd]:
+#+RESULTS[e167b9d6fa2d3b234837eb8e8bf3f1b2b993bebf]:
 [[file:plots/ridgeline.pdf]]
 
 Each plot is a kernel density plot which shows the shape and relative position
@@ -566,17 +566,20 @@ p <- ggplot(speedup_df %>%
               pivot_longer(cols = starts_with("speedup"),names_to = "comparison", values_to = "speedup")
            , aes(x = percentile, y = speedup, color = Branch, shape = Branch)) +
   geom_point(size = 3) +
+  scale_shape_manual(values=c(16,15,17)) +
+  scale_color_manual(values=c("red", "blue", "green")) +
   scale_y_continuous(breaks = seq(0,35,5)) +
   scale_x_continuous(breaks = seq(0,100,10)) +
   ylab("Speedup %") +
+  xlab("Percentile of totalTime") +
   ggtitle("Speedup of GHC96 over GHC810 by Branch") +
-  theme_minimal()
+  theme_bw()
 
 p
 #+end_src
 
-#+RESULTS[e86f832cfa51a075958dcf253b619991512644d2]:
-[[file:speedup_quantiles.pdf]]
+#+RESULTS[2a930365dce1301385bbeea7dd9ff14610bd2a57]:
+[[file:speedup_quantiles.png]]
 
 This plot shows the speedup of {{{g96}}} compared to {{{g810}}} for all branches
 at each 10th percentile of the ~totalTime~ distribution. For example, at the
@@ -606,54 +609,78 @@ speedup_baseline <- df %>%
   group_by(GHC,Branch) %>%
   reframe(enframe(quantile(totalTime, seq(0,1,0.1)), "quantile", "totalTime")) %>%
   pivot_wider(names_from = c(Branch,GHC), values_from = totalTime, names_sep = "") %>%
-  mutate(baselineSpeedup92    = calc_speedup(baseline810,baseline92)
-       , baselineSpeedup96    = calc_speedup(baseline810,baseline96)
-       , splitUMElemSpeedup92 = calc_speedup(baseline810,SplitUMElem92)
-       , splitUMElemSpeedup96 = calc_speedup(baseline810,SplitUMElem96)
-       , noFailTSpeedup92     = calc_speedup(baseline810,SplitUMElem92)
-       , noFailTSpeedup96     = calc_speedup(baseline810,SplitUMElem96)
+  mutate(baseline_92    = calc_speedup(baseline810,baseline92)
+       , baseline_96    = calc_speedup(baseline810,baseline96)
+       , splitUMElem_92 = calc_speedup(baseline810,SplitUMElem92)
+       , splitUMElem_96 = calc_speedup(baseline810,SplitUMElem96)
+       , noFailT_92     = calc_speedup(baseline810,NoFailT92)
+       , noFailT_96     = calc_speedup(baseline810,NoFailT96)
        , percentile = as.numeric(substr(quantile,1, nchar(quantile)-1))
        ) %>%
-  select(percentile,contains("Speedup"))
+  select(percentile,contains("_")) %>%
+  pivot_longer(cols = contains("_"), names_to = c("Branch", "GHC"), values_to = "speedup", names_sep="_") %>%
+  mutate(Branch = as.factor(Branch)
+         , GHC  = as.factor(GHC))
 
 speedup_baseline
 #+end_src
 
-#+RESULTS[9c7653c6ea5e9646c0bf2ac85cb9c62f93c54301]:
+#+RESULTS[b8ef4bb3b716b78315e4308814c7956eae2134e4]:
 #+begin_example
-# A tibble: 11 × 7
-   percentile baselineSpeedup92 baselineSpeedup96 splitUMElemSpeedup92
-        <dbl>             <dbl>             <dbl>                <dbl>
- 1          0            -93.1              2.27                -92.8
- 2         10            -93.2              2.08                -91.7
- 3         20            -95.3              1.97                -92.9
- 4         30           -116.               1.80               -114.
- 5         40            -47.0             12.7                 -50.1
- 6         50           -103.               0.348              -100.
- 7         60            -98.2              2.50                -94.8
- 8         70            -86.5              6.34                -83.4
- 9         80             -2.52            21.4                   9.69
-10         90             -3.14            21.0                  10.8
-11        100             15.9             19.9                  13.8
-# ℹ 3 more variables: splitUMElemSpeedup96 <dbl>, noFailTSpeedup92 <dbl>,
-#   noFailTSpeedup96 <dbl>
+# A tibble: 66 × 4
+   percentile Branch      GHC   speedup
+        <dbl> <fct>       <fct>   <dbl>
+ 1          0 baseline    92     -93.1
+ 2          0 baseline    96       2.27
+ 3          0 splitUMElem 92     -92.8
+ 4          0 splitUMElem 96       4.76
+ 5          0 noFailT     92    -110.
+ 6          0 noFailT     96       1.11
+ 7         10 baseline    92     -93.2
+ 8         10 baseline    96       2.08
+ 9         10 splitUMElem 92     -91.7
+10         10 splitUMElem 96       5.04
+# ℹ 56 more rows
+# ℹ Use `print(n = ...)` to see more rows
 #+end_example
+
 
 and now the plot:
 
 #+begin_src R :exports both :results output graphics file :file speedup_v_810_quantiles.pdf
 p <- speedup_baseline %>%
               pivot_longer(cols = contains("Speedup"),names_to = "comparison", values_to = "speedup") %>%
-  ggplot(aes(x = percentile, y = speedup, color = comparison, shape = comparison)) +
+              arrange(desc(Branch)) %>%
+  ggplot(aes(x = percentile, y = speedup, color = Branch, shape = Branch)) +
   geom_point(size = 3) +
-  scale_shape_manual(values=c(1,16,2,17,0,15)) +
-  scale_y_continuous(breaks = seq(-120,25,5)) +
+  facet_grid(GHC ~ ., scales = "free_y") +
+  scale_shape_manual(values=c(16,17,15)) +
+  scale_color_manual(values=c("red", "green", "blue")) +
   scale_x_continuous(breaks = seq(0,100,10)) +
   ylab("Speedup %") +
-  theme_minimal()
+  xlab("Percentile of totalTime") +
+  ggtitle("Speedup by GHC version and Branch with respect to GHC-810 Baseline") +
+  theme_bw()
 
 p
 #+end_src
 
-#+RESULTS[af564c4b043e07adaf9fc5487c36cfbf1081431d]:
-[[file:speedup_v_810_quantiles.pdf]]
+#+RESULTS[176a98cbdcf8056dc19d35063b0afb7ea5ff4d46]:
+[[file:speedup_v_810_quantiles.png]]
+
+This is a faceted plot, the top subplot shows the speedup relative to the
+baseline of {{{g810}}} for {{{g92}}}, notice that the y-axis is negative, i.e.,
+{{{g92}}} regresses. The bottom subplot shows the same speedup for {{{g96}}}. We
+see that ~SplitUMElem~ consistently shows more speedup over the baseline of
+{{{g810}}} except at the 40th percentile and above the 80th percentile where it
+matches the {{{g96}}} baseline. Note the subtle difference in this plot versus
+the last plot. In this plot we compare ~SplitUMElem~ on {{{g96}}} to the
+{{{g810}}} ~baseline~, whereas in the last plot we compared ~SplitUMElem~ on
+{{{g96}}} against ~SplitUMElem~ on {{{g810}}}. Thus we have two conclusions:
+first ~SplitUMElem~ experiences a larger speedup from {{{g96}}} than other
+branches; and second, that ~SplitUMElem~ performs better than both the {{{g96}}}
+and {{{g810}}} baseline until top 20 percent of the ~totalTime~ distribution.
+
+Therefore, whether to use ~SplitUMElem~ or not is a tradeoff: gain a 5%
+performance bump for the majority of slots in the sample at the cost of a slight
+regression for the absolutely slowest slots.
