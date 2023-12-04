@@ -1,5 +1,5 @@
 # -*- org-latex-minted-options: (("breaklines" "true") ("breakanywhere" "true") ("fontsize" "\\footnotesize")); -*-
-#+title: Cardano 92 Perf regression follow-up
+#+title: Cardano 92 Performance Regression Follow-up
 #+author: IOG DevX
 #+latex_class_options: [10pt]
 #+LATEX_HEADER: \usepackage{minted}
@@ -29,10 +29,11 @@
   - Removing ~FailT~ has a negative impact on performance. It is not worth
     further testing.
 
-  - Splitting ~UMElem~ to take advantage of pointer tagging improves performance
-    by 3% on {{{g96}}}. Compared to the {{{g810}}} baseline, the {{{g96}}}
-    ~SplitUMElem~ branch improves performance by ~5% for 70% of the data; for
-    the very slowest slots it slightly regresses the baseline on {{{g96}}}.
+  - Splitting ~UMElem~ to take better advantage of pointer tagging improves
+    performance by 3% on {{{g96}}}. Compared to the {{{g810}}} baseline, the
+    {{{g96}}} ~SplitUMElem~ branch improves performance by ~5% for 70% of the
+    data; for the very slowest slots it slightly regresses the baseline on
+    {{{g96}}}.
 
   - For the slowest slots in the dataset, {{{g96}}} outperforms {{{g810}}} with a
     13% improvement.
@@ -76,16 +77,19 @@
   - Furthermore, each observation belongs to a specific slot id, which means we
     have statistically /paired/ data. Paired data occurs when an observation is
     not independent between runs of an experiment. For example, if one was
-    testing a diet pill on 10 mice, mouse 1 is uniquely different than mouse 4,
-    and so the dataset will be 10 observations before the diet pill, and 10
-    after. Each observation belongs to a unique mouse and the experiment is
-    interested in how the pill changed each mouse individually, e.g., how did
-    mouse 1 change. Thus comparing mouse 1 to mouse 4 is not a meaningful
-    comparison. We are dealing with a similar kind of data. Each observation
-    belongs to a unique and not-independently sampled slot id. For example, slot
-    id 63 might always be more performance intensive than slot 73, and so it
-    would be incorrect to use statistical tests that assume a random sample.
-    Thus we must use statistical tests that account for paired data.
+    testing a diet pill on 10 mice, the dataset will have 10 observations before
+    the diet pill, and 10 after, for a total of 20 observations. Each
+    observation belongs to a unique mouse and the experiment is interested in
+    how the pill changed each mouse individually, e.g., how did mouse 1 change.
+    Thus comparing mouse 1 before the pill to mouse 4 after the pill is not a
+    meaningful comparison. Similarly, comparing mouse 1 before the pill to mouse
+    3 before the pill is not meaningful.
+
+    We are dealing with a similar kind of data. Each observation belongs to a
+    unique and not-independently sampled slot id. For example, slot id 63 might
+    always be more performance intensive than slot 73, and so it would be
+    incorrect to use statistical tests that assume a random sample. Thus we must
+    use statistical tests that account for paired data.
 
   - Next this data is not normally distributed:
 
@@ -172,16 +176,16 @@
     #+end_src
 
     Notice that this data type has 16 constructors. The idea behind this branch
-    is to split this data type into two types each with 8 constructors. With 8
-    constructors GHC will utilize pointer tagging to scrutinize this data type.
-    GHC uses three bits to tag pointers with ~000~ reserved to check for Thunks.
-    Thus GHC will check the pointer for 7 constructors each. This means that the
-    first 14 constructors will be scrutinized with pointer tagging, while
-    constructor 15 and 16 will be scrutinized by looking up the constructor in
-    the heap objects info-table. This should be much faster than the 16
-    constructor version, which will still perform the pointer tagging for the
-    first 7 constructors, and then chase pointers to the info table of the heap
-    object after that. You can find the patch [[https://github.com/input-output-hk/cardano-ledger/compare/master...doyougnu:cardano-ledger:wip/perf-split-umelem][here]].
+    is to split this data type into two types each with 8 constructors. GHC uses
+    three bits to tag pointers with ~000~ reserved to check for Thunks. Thus for a
+    given data type GHC will check the pointer tag for the first 7 constructors;
+    which is the case for the original version. By splitting ~UMElem~ into two
+    data types GHC which check the pointer tag for the first 14 constructors,
+    while constructor 15 and 16 will be scrutinized by looking up the
+    constructor information in the heap objects' info-table. This should be much
+    faster than the 16 constructor version, even at the cost of two extra
+    machine words (one word each to differentiate between the two new data
+    types). You can find the patch [[https://github.com/input-output-hk/cardano-ledger/compare/master...doyougnu:cardano-ledger:wip/perf-split-umelem][here]].
 
 ** Removing FailT
 
@@ -526,7 +530,7 @@ The speedup at the upper tail of the distribution is interesting. Let's
 calculate the speedup of the distribution for each GHC version and branch and
 plot them:
 
-#+begin_src R :exports both :results output
+#+begin_src R :exports both :results output :cache no
 speedup_df <- df %>%
     group_by(GHC,Branch) %>%
     reframe(enframe(quantile(totalTime, seq(0,1,0.1)), "quantile", "totalTime")) %>%
@@ -560,7 +564,7 @@ speedup_df
 and now to plot, we'll only focus on {{{g96}}} because {{{g92}}} clearly
 regresses:
 
-#+begin_src R :exports both :results output graphics file :file speedup_quantiles.pdf
+#+begin_src R :exports both :results output graphics file :file speedup_quantiles.pdf :cache no
 p <- ggplot(speedup_df %>%
               select(!speedup92) %>%
               pivot_longer(cols = starts_with("speedup"),names_to = "comparison", values_to = "speedup")
@@ -578,8 +582,8 @@ p <- ggplot(speedup_df %>%
 p
 #+end_src
 
-#+RESULTS[2a930365dce1301385bbeea7dd9ff14610bd2a57]:
-[[file:speedup_quantiles.png]]
+#+RESULTS[4b5fdb43b6afca9d77149348fc5825f5f841dbb0]:
+[[file:speedup_quantiles.pdf]]
 
 This plot shows the speedup of {{{g96}}} compared to {{{g810}}} for all branches
 at each 10th percentile of the ~totalTime~ distribution. For example, at the
@@ -600,7 +604,7 @@ To wrap up, we'll create the same speedup plot but instead of showing the
 speedup of each branch on {{{g96}}} compared to {{{g810}}}, we'll compare each
 branch on {{{g96}}} to only the baseline of {{{g810}}}:
 
-#+begin_src R :exports both :results output
+#+begin_src R :exports both :results output :cache no
 calc_speedup <- function(baseline,branch) {
   ((baseline - branch) / baseline) * 100
 }
@@ -647,7 +651,7 @@ speedup_baseline
 
 and now the plot:
 
-#+begin_src R :exports both :results output graphics file :file speedup_v_810_quantiles.pdf
+#+begin_src R :exports both :results output graphics file :file speedup_v_810_quantiles.pdf :cache no
 p <- speedup_baseline %>%
               pivot_longer(cols = contains("Speedup"),names_to = "comparison", values_to = "speedup") %>%
               arrange(desc(Branch)) %>%
@@ -665,8 +669,8 @@ p <- speedup_baseline %>%
 p
 #+end_src
 
-#+RESULTS[176a98cbdcf8056dc19d35063b0afb7ea5ff4d46]:
-[[file:speedup_v_810_quantiles.png]]
+#+RESULTS[ce9658bd735bf1916f36ea776332b04cf78aafcd]:
+[[file:speedup_v_810_quantiles.pdf]]
 
 This is a faceted plot, the top subplot shows the speedup relative to the
 baseline of {{{g810}}} for {{{g92}}}, notice that the y-axis is negative, i.e.,
